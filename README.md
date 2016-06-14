@@ -1,3 +1,3 @@
-# Pentalog_CHI_alex
-Test repot for test scripts based on roadmap
+## Pentalog_CHI_alex
+Test report for test scripts based on roadmap
 
