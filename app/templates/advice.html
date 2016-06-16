@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h1> Advices for {{ current_user.nickname }} </h1>
+<form action='/store_advice' method='GET'>
+{% for advice in advices %}
+<input type='text' value='{{ advice.text|striptags }}' name='advice[]' size='120' readonly>
+<input type='hidden' value='{{ advice.id }}' name='foreign_id[]'>
+{% endfor %}
+{% if not read %}
+<input type='submit' value='Store'>
+{% endif %}
+</form>
+{% endblock %}
