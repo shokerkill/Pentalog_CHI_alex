@@ -4,6 +4,7 @@ from app import app, db
 from .forms import LoginForm
 from .models import User, Advice
 import json, requests
+import asyncio
 
 @app.route('/')
 @app.route('/index')
@@ -44,26 +45,58 @@ def logout():
 @app.route('/advice/<advice_type>')
 @login_required
 def advice(advice_type):
-    advice_url = 'http://fucking-great-advice.ru/api/'
-    if advice_type == 'censored':
-       advice_type = 'random/censored'
-    resp = requests.get(url=advice_url+advice_type, params={})
-    data = json.loads(resp.text)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    data = loop.run_until_complete(get_advice(advice_type))
     if not isinstance(data, list):
         data = [data]
+    loop.close()
     return render_template('advice.html', advices=data, read=False)
+
+@app.route('/advice/save/<number>/<advice_type>')
+@login_required
+def save_randoms(number, advice_type):
+    netto = int(number)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    subtasks = []
+    for i in range(netto):
+        subtasks.append(get_advice(advice_type))
+    data = loop.run_until_complete(asyncio.gather(*subtasks))
+    if not isinstance(data, list):
+        data = [data]
+    loop.close()
+    for data in data:
+        advice = Advice.query.filter(Advice.foreign_id == int(data['id'])).first()
+        if advice:
+            if not current_user in advice.victims:
+                advice.victims.add(current_user)
+        else:
+            advice = Advice(text=data['text'], foreign_id=int(data['id']), victims=[current_user])
+        db.session.add(advice)
+        db.session.commit()
+    return redirect(url_for('index'))
 
 @app.route('/store_advice', methods=['GET', 'POST'])
 @login_required
 def advice_store():
     advice = Advice.query.filter(Advice.foreign_id == int(request.args['foreign_id[]'])).first()
     if advice:
-        advice.victims.add(current_user)
+        if not current_user in advice.victims:
+            advice.victims.add(current_user)
     else:
         advice = Advice(text=request.args['advice[]'], foreign_id=int(request.args['foreign_id[]']), victims=[current_user])
     db.session.add(advice)
     db.session.commit()
     return redirect(url_for('index'))
+
+async def get_advice(advice_type):
+    advice_url = 'http://fucking-great-advice.ru/api/'
+    if advice_type == 'censored':
+       advice_type = 'random/censored'
+    resp = requests.get(url=advice_url+advice_type, params={})
+    data = json.loads(resp.text)
+    return data
 
 @app.route('/self_advices')
 @login_required
